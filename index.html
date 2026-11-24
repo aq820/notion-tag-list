@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Notion Vault</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🗄️%3C/text%3E%3C/svg%3E">
+<style>
+:root{--bg:#f6f7f9;--surface:#fff;--text:#202124;--sub:#5f6368;--line:#dadce0;--accent:#1a73e8}
+@media(prefers-color-scheme:dark){:root{--bg:#202124;--surface:#2d2e31;--text:#e8eaed;--sub:#9aa0a6;--line:#5f6368;--accent:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+header{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--line);padding:8px 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+header h1{font-size:18px;margin:0 8px 0 0}
+header input[type=search],header select{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:5px 10px}
+.sp{flex:1}
+.ib{border:1px solid var(--line);background:transparent;border-radius:8px;padding:5px 10px}
+#status{color:var(--sub);font-size:12px}
+#legend{display:flex;flex-wrap:wrap;gap:8px;padding:10px 16px 0}
+.lg{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:2px 10px;font-size:12px}
+.lg i{width:10px;height:10px;border-radius:50%;background:var(--c)}
+.lg.off{opacity:.4;text-decoration:line-through}
+main{padding:12px 16px 60px;max-width:1400px;margin:0 auto}
+#errors{background:#fde7e9;color:#a4262c;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:13px;white-space:pre-wrap}
+#errors:empty{display:none}
+#grid{columns:250px;column-gap:12px}
+.card{break-inside:avoid;margin:0 0 12px;border-radius:10px;padding:10px 12px;cursor:pointer;position:relative;
+  background:color-mix(in srgb,var(--c) 30%,var(--surface));border:1px solid color-mix(in srgb,var(--c) 70%,transparent)}
+.card:hover{box-shadow:0 2px 8px #0003}
+.ct{font-weight:600;font-size:15px;word-break:break-word;margin-bottom:4px}
+.body{max-height:240px;overflow:hidden;font-size:13px;word-break:break-word;
+  -webkit-mask-image:linear-gradient(#000 85%,transparent);mask-image:linear-gradient(#000 85%,transparent)}
+.md .h{font-weight:600;margin-top:4px}.md .h1{font-size:16px}.md .h2{font-size:15px}
+.md .li{padding-left:4px}
+.md .done{text-decoration:line-through;color:var(--sub)}
+.md pre{background:#0002;border-radius:6px;padding:6px;overflow:auto;white-space:pre-wrap;margin:4px 0}
+.md code{background:#0002;border-radius:4px;padding:0 4px}
+.md .q{border-left:3px solid var(--sub);padding-left:8px;color:var(--sub)}
+.md img{max-width:100%;border-radius:6px}
+.md .unk,.body.err{color:var(--sub);font-size:12px}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.chip{background:#0001;color:#37352f;border-radius:4px;padding:0 6px;font-size:12px}
+.foot{display:flex;gap:6px;align-items:center;margin-top:8px;font-size:11px;color:var(--sub)}
+.foot .dot{width:8px;height:8px;border-radius:50%;background:var(--c)}
+.foot .t{margin-left:auto}
+.empty{text-align:center;color:var(--sub);padding:60px 0}
+dialog{border:0;border-radius:12px;padding:0;background:var(--surface);color:var(--text);box-shadow:0 8px 40px #0006;max-width:94vw}
+dialog::backdrop{background:#0006}
+.dlg{padding:18px 20px;width:min(640px,94vw);max-height:88vh;overflow:auto}
+.dlg h2{margin:0 0 10px;font-size:17px}
+.dlg .row{display:flex;gap:8px;margin:6px 0;align-items:center;flex-wrap:wrap}
+.dlg input[type=text],.dlg input[type=password],.dlg select{border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:5px 8px;min-width:0}
+.dbitem{border-bottom:1px dashed var(--line);padding-bottom:6px;margin-bottom:6px}
+.dbitem .id{flex:2 1 220px}.dbitem .lb{flex:1 1 100px}.dbitem .tags{flex:3 1 220px}.dbitem .pn{flex:1 1 120px}
+.dbitem .c{width:36px;height:30px;padding:0;border:0;background:none}
+.btns{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+.btn{border:1px solid var(--line);background:transparent;border-radius:8px;padding:6px 14px}
+.btn.p{background:var(--accent);border-color:var(--accent);color:#fff}
+.note{font-size:12px;color:var(--sub)}
+</style>
+</head>
+<body>
+<header>
+  <h1>🗄️ Notion Vault</h1>
+  <input type="search" id="q" placeholder="検索(タイトル・タグ・本文)">
+  <select id="sort">
+    <option value="edited">更新が新しい順</option>
+    <option value="cdesc">作成が新しい順</option>
+    <option value="casc">作成が古い順</option>
+  </select>
+  <span id="status"></span>
+  <span class="sp"></span>
+  <button class="ib" id="reload" title="再読み込み">⟳</button>
+  <button class="ib" id="openSettings">⚙ 設定</button>
+</header>
+<div id="legend"></div>
+<main>
+  <div id="errors"></div>
+  <div id="grid"></div>
+  <div id="msg" class="empty"></div>
+</main>
+
+<dialog id="dlgSettings"><div class="dlg">
+  <h2>設定</h2>
+  <div class="row"><label style="width:120px">Notionトークン</label>
+    <input type="password" id="tokenIn" style="flex:1" placeholder="ntn_… / secret_…" autocomplete="off"></div>
+  <div class="row"><label style="width:120px">プロキシURL</label>
+    <input type="text" id="proxyIn" style="flex:1" placeholder="https://notion-keep-proxy.kok-252.workers.dev"></div>
+  <p class="note">この画面の設定は Notion Keep とは別に保存されます。同じトークンとプロキシURLを入力してください。</p>
+  <h2 style="margin-top:14px">保管するデータベース</h2>
+  <p class="note">タグは空白またはカンマ区切り(タグ名に空白がある場合はカンマ区切り)。タグのプロパティ名は、空欄なら自動判定します。</p>
+  <div id="dbRows"></div>
+  <div class="row"><button class="btn" id="addRow">＋ データベースを追加</button></div>
+  <div class="row"><label><input type="checkbox" id="previewIn"> カードに本文を表示する(重い場合はオフ)</label></div>
+  <div class="btns"><button class="btn" id="setCancel">キャンセル</button><button class="btn p" id="setSave">保存</button></div>
+</div></dialog>
+
+<dialog id="dlgView"><div class="dlg" id="view"></div></dialog>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const PALETTE = ['#f28b82','#fbbc04','#fff475','#ccff90','#a7ffeb','#aecbfa','#d7aefb','#fdcfe8'];
+const TAG = {default:'#e3e2e0',gray:'#e3e2e0',brown:'#eee0da',orange:'#fadec9',yellow:'#fdecc8',green:'#dbeddb',blue:'#d3e5ef',purple:'#e8deee',pink:'#f5e0e9',red:'#ffe2dd'};
+
+/* ---------- helpers ---------- */
+function h(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') e.className = v;
+    else if (k === 'style') e.style.cssText = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (v === true) e.setAttribute(k, '');
+    else if (v !== false && v != null) e.setAttribute(k, v);
+  }
+  for (const c of kids.flat()) { if (c == null || c === false) continue; e.append(c.nodeType ? c : document.createTextNode(c)); }
+  return e;
+}
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const rt = (a) => (a || []).map((x) => x.plain_text).join('');
+function extractId(s) {
+  const m = String(s).split('?')[0].match(/[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}/i);
+  return m ? m[0].replace(/-/g, '') : null;
+}
+const parseTags = (s) => (/[,、，]/.test(s) ? s.split(/[,、，]/) : s.split(/\s+/)).map((x) => x.trim()).filter(Boolean);
+const fmtCreated = (t) => new Date(t).toLocaleString('ja-JP', { year: '2-digit', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+/* ---------- state ---------- */
+const cfg = Object.assign({ token: '', dbs: [], hidden: [], preview: true, proxy: '' }, JSON.parse(localStorage.getItem('nvault.cfg') || '{}'));
+const saveCfg = () => localStorage.setItem('nvault.cfg', JSON.stringify(cfg));
+let sources = null, items = [], loadSeq = 0;
+const itemsById = new Map(), mdCache = new Map();
+
+/* ---------- API ---------- */
+const proxyBase = () => (cfg.proxy || '').replace(/\/+$/, '');
+async function api(path, { method = 'GET', body } = {}) {
+  for (let i = 0; i < 5; i++) {
+    const r = await fetch(proxyBase() + '/notion' + path, {
+      method,
+      headers: { 'content-type': 'application/json', 'x-notion-token': cfg.token },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (r.status === 429 || r.status === 529) { await sleep(Math.min(+r.headers.get('retry-after') || 2, 30) * 1000); continue; }
+    const text = await r.text(); let j; try { j = JSON.parse(text); } catch { j = { message: text }; }
+    if (!r.ok) { const e = new Error(j.message || r.statusText); e.status = r.status; throw e; }
+    return j;
+  }
+  throw new Error('リトライ上限に達しました');
+}
+const queue = []; let running = 0;
+function enqueue(fn) { return new Promise((res, rej) => { queue.push({ fn, res, rej }); pump(); }); }
+function pump() { while (running < 2 && queue.length) { const j = queue.shift(); running++; j.fn().then(j.res, j.rej).finally(() => { running--; pump(); }); } }
+
+/* ---------- sources ---------- */
+function pickTagProp(props, tags, want) {
+  const ok = (n) => props[n] && (props[n].type === 'multi_select' || props[n].type === 'select');
+  if (want) return ok(want) ? want : null;
+  let best = null, score = 0;
+  for (const n of Object.keys(props)) {
+    if (!ok(n)) continue;
+    const names = props[n][props[n].type].options.map((o) => o.name);
+    const sc = tags.filter((t) => names.includes(t)).length;
+    if (sc > score) { best = n; score = sc; }
+  }
+  return best;
+}
+async function resolveSources(errors) {
+  const out = [];
+  for (const d of cfg.dbs) {
+    const tags = parseTags(d.tags || '');
+    try {
+      let list;
+      try {
+        const db = await api('/databases/' + d.id);
+        list = (db.data_sources || []).map((x) => ({ id: x.id, name: x.name }));
+        if (!list.length) throw Object.assign(new Error('data source が見つかりません'), { status: 404 });
+      } catch (e) {
+        if (e.status !== 400 && e.status !== 404) throw e;
+        const ds = await api('/data_sources/' + d.id).catch(() => { throw e; });
+        list = [{ id: ds.id, name: rt(ds.title) }];
+      }
+      for (const x of list) {
+        const ds = await api('/data_sources/' + x.id);
+        const nm = rt(ds.title) || x.name || 'DB';
+        const label = d.label ? (list.length > 1 ? `${d.label} / ${nm}` : d.label) : nm;
+        const titleProp = Object.keys(ds.properties).find((k) => ds.properties[k].type === 'title');
+        const tagProp = pickTagProp(ds.properties, tags, d.prop);
+        if (!tags.length) { errors.push(`${label}: タグが指定されていません`); continue; }
+        if (!tagProp) { errors.push(`${label}: タグのプロパティ(マルチセレクト/セレクト)が見つかりません。指定タグを選択肢に持つプロパティがあるか確認するか、設定でプロパティ名を指定してください`); continue; }
+        const type = ds.properties[tagProp].type, names = ds.properties[tagProp][type].options.map((o) => o.name);
+        const miss = tags.filter((t) => !names.includes(t));
+        if (miss.length) errors.push(`${label}: 「${tagProp}」に選択肢が無いタグ: ${miss.join('、')}`);
+        out.push({ dsId: ds.id, color: d.color, props: ds.properties, titleProp, tagProp, type, tags, mode: d.mode === 'and' ? 'and' : 'or', label });
+      }
+    } catch (e) {
+      errors.push(`${d.label || d.raw}: ${e.status ? e.message + '(IDとインテグレーションの接続を確認してください)' : 'プロキシに接続できません(プロキシURL・許可オリジン・ネットワークを確認してください)'}`);
+    }
+  }
+  return out;
+}
+async function queryAll(src) {
+  const conds = src.tags.map((t) => ({ property: src.tagProp, [src.type]: src.type === 'multi_select' ? { contains: t } : { equals: t } }));
+  const filter = conds.length === 1 ? conds[0] : { [src.mode]: conds };
+  let cursor, all = [];
+  do {
+    const body = { page_size: 100, filter, sorts: [{ timestamp: 'last_edited_time', direction: 'descending' }] };
+    if (cursor) body.start_cursor = cursor;
+    const r = await api(`/data_sources/${src.dsId}/query`, { method: 'POST', body });
+    all.push(...r.results.filter((x) => x.object === 'page'));
+    cursor = r.has_more ? r.next_cursor : null;
+  } while (cursor);
+  return all;
+}
+async function load(refreshSchema) {
+  const seq = ++loadSeq, errors = [];
+  $('#msg').textContent = '';
+  if (!cfg.token || !cfg.dbs.length || !cfg.proxy) {
+    items = []; itemsById.clear(); renderAll();
+    $('#msg').textContent = '右上の「設定」からトークン・プロキシURL・データベースを登録してください。';
+    return;
+  }
+  $('#status').textContent = '読み込み中…';
+  try {
+    if (refreshSchema || !sources) sources = await resolveSources(errors);
+    const results = await Promise.all(sources.map((s) =>
+      queryAll(s).then((ps) => ps.map((page) => ({ page, src: s }))).catch((e) => { errors.push(`${s.label}: ${e.message}`); return []; })));
+    if (seq !== loadSeq) return;
+    items = results.flat();
+    itemsById.clear(); items.forEach((it) => itemsById.set(it.page.id, it));
+  } catch (e) { errors.push(e.message); }
+  $('#errors').textContent = errors.join('\n');
+  renderAll();
+}
+
+/* ---------- markdown ---------- */
+function inline(s) {
+  s = esc(s);
+  return s.replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, '$1<i>$2</i>').replace(/~~([^~]+)~~/g, '<s>$1</s>')
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>').replace(/&lt;br&gt;/g, '<br>');
+}
+function renderMd(md) {
+  const out = []; let fence = false, code = [];
+  for (const raw of md.split('\n')) {
+    if (/^\s*```/.test(raw)) { if (fence) { out.push('<pre>' + esc(code.join('\n')) + '</pre>'); code = []; fence = false; } else fence = true; continue; }
+    if (fence) { code.push(raw); continue; }
+    if (!raw.trim()) continue;
+    const ind = raw.match(/^[\t ]*/)[0].replace(/ {2}/g, '\t').length * 14;
+    const l = raw.trim(); let m;
+    if (/^<unknown/i.test(l)) { out.push('<div class="unk">(未対応のブロック)</div>'); continue; }
+    if (/^<\/?[a-z][\w-]*(\s[^>]*)?\/?>$/i.test(l)) continue;
+    if ((m = l.match(/^[-*] \[([ xX])\] ?(.*)$/))) { const d = m[1] !== ' '; out.push(`<div class="li ${d ? 'done' : ''}" style="margin-left:${ind}px">${d ? '☑' : '☐'} ${inline(m[2])}</div>`); continue; }
+    if ((m = l.match(/^(#{1,4}) (.*)$/))) { out.push(`<div class="h h${m[1].length}">${inline(m[2])}</div>`); continue; }
+    if ((m = l.match(/^[-*] (.*)$/))) { out.push(`<div class="li" style="margin-left:${ind}px">• ${inline(m[1])}</div>`); continue; }
+    if ((m = l.match(/^(\d+)\. (.*)$/))) { out.push(`<div class="li" style="margin-left:${ind}px">${m[1]}. ${inline(m[2])}</div>`); continue; }
+    if ((m = l.match(/^> ?(.*)$/))) { out.push(`<div class="q">${inline(m[1])}</div>`); continue; }
+    if (/^---+$/.test(l)) { out.push('<hr>'); continue; }
+    if ((m = l.match(/^!\[.*?\]\((https?:[^)\s]+)\)$/))) { out.push(`<img src="${esc(m[1])}" loading="lazy">`); continue; }
+    out.push(`<div>${inline(l)}</div>`);
+  }
+  if (fence) out.push('<pre>' + esc(code.join('\n')) + '</pre>');
+  return out.join('');
+}
+function getMd(page) {
+  const c = mdCache.get(page.id);
+  if (c && c.edited === page.last_edited_time) return Promise.resolve(c);
+  return enqueue(async () => {
+    const r = await api(`/pages/${page.id}/markdown?markdown_version=v2`);
+    const v = { md: r.markdown || '', truncated: !!r.truncated, edited: page.last_edited_time };
+    mdCache.set(page.id, v); return v;
+  });
+}
+
+/* ---------- cards ---------- */
+const titleOf = (it) => rt((it.page.properties[it.src.titleProp] || {}).title);
+const tagsOf = (it) => { const p = it.page.properties[it.src.tagProp]; if (!p) return []; return p.type === 'multi_select' ? p.multi_select : p.select ? [p.select] : []; };
+function paintBody(el, m) { if (!m.md.trim()) { el.remove(); return; } el.innerHTML = renderMd(m.md); }
+const io = new IntersectionObserver((es) => {
+  for (const en of es) if (en.isIntersecting) { io.unobserve(en.target); fillBody(en.target); }
+}, { rootMargin: '300px' });
+async function fillBody(el) {
+  const it = itemsById.get(el.dataset.id); if (!it) return;
+  try { paintBody(el, await getMd(it.page)); }
+  catch (e) { el.classList.add('err'); el.textContent = '本文の取得に失敗: ' + e.message; }
+}
+function cardEl(it) {
+  const { page, src } = it;
+  const body = cfg.preview ? h('div', { class: 'body md', 'data-id': page.id }) : null;
+  const tg = tagsOf(it);
+  const el = h('div', { class: 'card', 'data-id': page.id, style: `--c:${src.color}` },
+    h('div', { class: 'ct' }, page.icon && page.icon.type === 'emoji' ? page.icon.emoji + ' ' : '', titleOf(it) || '無題'),
+    body,
+    tg.length ? h('div', { class: 'chips' }, tg.map((o) => h('span', { class: 'chip', style: `background:${TAG[o.color] || TAG.default}` }, o.name))) : null,
+    h('div', { class: 'foot' }, h('span', { class: 'dot' }), h('span', {}, src.label), h('span', { class: 't' }, fmtCreated(page.created_time))));
+  if (body) { const c = mdCache.get(page.id); if (c && c.edited === page.last_edited_time) paintBody(body, c); else io.observe(body); }
+  return el;
+}
+function renderAll() {
+  const legend = $('#legend'); legend.replaceChildren();
+  (sources || []).forEach((s) => legend.append(h('button', { class: 'lg' + (cfg.hidden.includes(s.dsId) ? ' off' : ''), style: `--c:${s.color}`,
+    title: `${s.tagProp}: ${s.tags.join(s.mode === 'and' ? ' かつ ' : ' または ')}`,
+    onclick: () => { const i = cfg.hidden.indexOf(s.dsId); i < 0 ? cfg.hidden.push(s.dsId) : cfg.hidden.splice(i, 1); saveCfg(); renderAll(); } },
+    h('i'), `${s.label} [${s.tags.join(s.mode === 'and' ? ' & ' : ' | ')}]`)));
+  const q = $('#q').value.trim().toLowerCase(), sort = $('#sort').value;
+  const key = (it) => Date.parse(sort === 'edited' ? it.page.last_edited_time : it.page.created_time);
+  const list = items.filter((it) => !cfg.hidden.includes(it.src.dsId))
+    .filter((it) => !q || (titleOf(it) + ' ' + tagsOf(it).map((o) => o.name).join(' ') + ' ' + ((mdCache.get(it.page.id) || {}).md || '')).toLowerCase().includes(q))
+    .sort((a, b) => (sort === 'casc' ? 1 : -1) * (key(a) - key(b)));
+  $('#grid').replaceChildren(...list.map(cardEl));
+  $('#status').textContent = sources ? `${list.length}件` : '';
+  if (cfg.token && cfg.dbs.length && cfg.proxy) $('#msg').textContent = list.length ? '' : '条件に合うノートがありません';
+}
+
+/* ---------- viewer ---------- */
+async function shareNote(it) {
+  const m = await getMd(it.page), title = titleOf(it) || '無題';
+  const body = m.md.split('\n').filter((l) => !/^\s*<unknown\b/i.test(l)).join('\n').trim();
+  const text = body ? title + '\n\n' + body : title;
+  if (navigator.share) { try { await navigator.share({ text }); } catch (e) { if (e.name !== 'AbortError') throw e; } return; }
+  await navigator.clipboard.writeText(text); alert('共有機能が使えない環境のため、クリップボードにコピーしました');
+}
+async function openView(id) {
+  const it = itemsById.get(id); if (!it) return;
+  const body = h('div', { class: 'md' }, '読み込み中…');
+  $('#view').replaceChildren(
+    h('div', { class: 'row' }, h('span', { class: 'lg', style: `--c:${it.src.color}` }, h('i'), it.src.label), h('span', { class: 'sp' }),
+      h('a', { href: it.page.url, target: '_blank', rel: 'noopener' }, 'Notionで開く ↗')),
+    h('h2', {}, titleOf(it) || '無題'),
+    h('div', { class: 'chips' }, tagsOf(it).map((o) => h('span', { class: 'chip', style: `background:${TAG[o.color] || TAG.default}` }, o.name))),
+    body,
+    h('div', { class: 'btns' },
+      h('button', { class: 'btn', onclick: () => shareNote(it).catch((e) => alert('失敗しました: ' + e.message)) }, '共有'),
+      h('button', { class: 'btn p', onclick: () => $('#dlgView').close() }, '閉じる')));
+  $('#dlgView').showModal();
+  try { const m = await getMd(it.page); body.innerHTML = m.md.trim() ? renderMd(m.md) : '(本文なし)'; if (m.truncated) body.append(h('p', { class: 'note' }, '本文が長いため一部のみ表示しています。')); }
+  catch (e) { body.textContent = '本文の取得に失敗: ' + e.message; }
+}
+
+/* ---------- settings ---------- */
+function addRow(d = {}) {
+  const idx = $('#dbRows').children.length;
+  const wrap = h('div', { class: 'dbitem' },
+    h('div', { class: 'row' },
+      h('input', { type: 'color', class: 'c', value: d.color || PALETTE[idx % PALETTE.length] }),
+      h('input', { type: 'text', class: 'id', placeholder: 'データベースURL / ID', value: d.raw || '' }),
+      h('input', { type: 'text', class: 'lb', placeholder: '表示名(任意)', value: d.label || '' }),
+      h('button', { type: 'button', class: 'btn', onclick: () => wrap.remove() }, '削除')),
+    h('div', { class: 'row' },
+      h('input', { type: 'text', class: 'tags', placeholder: 'タグ(例: 重要 仕事 メモ)', value: d.tags || '' }),
+      h('select', { class: 'mode' }, h('option', { value: 'or' }, 'OR(どれか1つ)'), h('option', { value: 'and' }, 'AND(すべて)')),
+      h('input', { type: 'text', class: 'pn', placeholder: 'タグのプロパティ名(任意)', value: d.prop || '' })));
+  wrap.querySelector('.mode').value = d.mode === 'and' ? 'and' : 'or';
+  $('#dbRows').append(wrap);
+}
+function openSettings() {
+  $('#tokenIn').value = cfg.token; $('#proxyIn').value = cfg.proxy || ''; $('#previewIn').checked = cfg.preview;
+  $('#dbRows').replaceChildren(); (cfg.dbs.length ? cfg.dbs : [{}]).forEach(addRow); $('#dlgSettings').showModal();
+}
+function saveSettings() {
+  const dbs = [];
+  for (const r of $('#dbRows').children) {
+    const raw = r.querySelector('.id').value.trim(); if (!raw) continue;
+    const id = extractId(raw); if (!id) return alert('IDを認識できません: ' + raw);
+    dbs.push({ raw, id, color: r.querySelector('.c').value, label: r.querySelector('.lb').value.trim(),
+      tags: r.querySelector('.tags').value.trim(), mode: r.querySelector('.mode').value, prop: r.querySelector('.pn').value.trim() });
+  }
+  const proxy = $('#proxyIn').value.trim().replace(/\/+$/, '');
+  if (!/^https?:\/\//.test(proxy)) return alert('プロキシURLは https:// から始めてください');
+  cfg.token = $('#tokenIn').value.trim(); cfg.proxy = proxy; cfg.dbs = dbs; cfg.preview = $('#previewIn').checked; saveCfg();
+  $('#dlgSettings').close(); sources = null; load(true);
+}
+
+/* ---------- events ---------- */
+$('#q').addEventListener('input', renderAll); $('#sort').addEventListener('change', renderAll);
+$('#reload').addEventListener('click', () => load(true));
+$('#openSettings').addEventListener('click', openSettings);
+$('#addRow').addEventListener('click', () => addRow()); $('#setSave').addEventListener('click', saveSettings);
+$('#setCancel').addEventListener('click', () => $('#dlgSettings').close());
+$('#grid').addEventListener('click', (e) => {
+  if (e.target.closest('a')) return;
+  const c = e.target.closest('.card'); if (c) openView(c.dataset.id);
+});
+load(true);
+</script>
+</body>
+</html>
