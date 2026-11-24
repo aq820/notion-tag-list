@@ -319,11 +319,12 @@ function renderAll() {
   const q = $('#q').value.trim().toLowerCase(), sort = $('#sort').value;
   const key = (it) => Date.parse(sort === 'edited' ? it.page.last_edited_time : it.page.created_time);
   /* 重複除去: 表示中の行のうち、上の行を優先して同じノートは1枚だけ残す */
+  const order = new Map((sources || []).map((s, i) => [s.key, i]));
   const seen = new Set();
   const list = items.filter((it) => !cfg.hidden.includes(it.src.key))
     .filter((it) => { if (seen.has(it.page.id)) return false; seen.add(it.page.id); return true; })
     .filter((it) => !q || (titleOf(it) + ' ' + tagsOf(it).map((o) => o.name).join(' ') + ' ' + ((mdCache.get(it.page.id) || {}).md || '')).toLowerCase().includes(q))
-    .sort((a, b) => (sort === 'casc' ? 1 : -1) * (key(a) - key(b)));
+    .sort((a, b) => (order.get(a.src.key) - order.get(b.src.key)) || (sort === 'casc' ? 1 : -1) * (key(a) - key(b)));
   list.forEach((it) => itemsById.set(it.page.id, it));   /* 表示中のカードの行情報を確定 */
   $('#grid').replaceChildren(...list.map(cardEl));
   $('#status').textContent = sources ? `${list.length}件` : '';
