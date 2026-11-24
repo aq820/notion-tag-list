@@ -58,6 +58,7 @@ dialog::backdrop{background:#0006}
 .btns{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
 .btn{border:1px solid var(--line);background:transparent;border-radius:8px;padding:6px 14px}
 .btn.p{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.mv{padding:6px 10px}
 .note{font-size:12px;color:var(--sub)}
 .cbtn{border:0;background:transparent;color:var(--sub);border-radius:6px;padding:5px 8px;line-height:1;display:inline-flex;align-items:center}
 .cbtn:hover{background:#0001;color:var(--text)}
@@ -90,10 +91,10 @@ dialog::backdrop{background:#0006}
   <div class="row"><label style="width:120px">Notionトークン</label>
     <input type="password" id="tokenIn" style="flex:1" placeholder="ntn_… / secret_…" autocomplete="off"></div>
   <div class="row"><label style="width:120px">プロキシURL</label>
-    <input type="text" id="proxyIn" style="flex:1" placeholder="https://****.workers.dev"></div>
+    <input type="text" id="proxyIn" style="flex:1" placeholder="https://***.workers.dev"></div>
   <p class="note">この画面の設定は Notion Keep とは別に保存されます。同じトークンとプロキシURLを入力してください。</p>
   <h2 style="margin-top:14px">保管するデータベース</h2>
-  <p class="note">タグは空白またはカンマ区切り(タグ名に空白がある場合はカンマ区切り)。タグのプロパティ名は、空欄なら自動判定します。</p>
+  <p class="note">タグは空白またはカンマ区切り(タグ名に空白がある場合はカンマ区切り)。タグのプロパティ名は、空欄なら自動判定します。▲▼で順番を変えられます。同じノートが複数の条件に合う場合は、上の行のカードだけが表示されます。</p>
   <div id="dbRows"></div>
   <div class="row"><button class="btn" id="addRow">＋ データベースを追加</button></div>
   <div class="row"><label><input type="checkbox" id="previewIn"> カードに本文を表示する(重い場合はオフ)</label></div>
@@ -129,6 +130,7 @@ function extractId(s) {
 }
 const parseTags = (s) => (/[,、，]/.test(s) ? s.split(/[,、，]/) : s.split(/\s+/)).map((x) => x.trim()).filter(Boolean);
 const fmtCreated = (t) => new Date(t).toLocaleString('ja-JP', { year: '2-digit', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+const newUid = () => 'u' + Math.random().toString(36).slice(2, 10);
 
 /* ---------- state ---------- */
 const cfg = Object.assign({ token: '', dbs: [], hidden: [], preview: true, proxy: '' }, JSON.parse(localStorage.getItem('nvault.cfg') || '{}'));
@@ -171,8 +173,9 @@ function pickTagProp(props, tags, want) {
 }
 async function resolveSources(errors) {
   const out = [];
-  for (const d of cfg.dbs) {
+  for (const [idx, d] of cfg.dbs.entries()) {
     const tags = parseTags(d.tags || '');
+    const rowKey = d.uid || (d.id + '#' + idx);   /* 行ごとの内部ID(凡例の表示切替に使用) */
     try {
       let list;
       try {
@@ -195,7 +198,7 @@ async function resolveSources(errors) {
         const type = ds.properties[tagProp].type, names = ds.properties[tagProp][type].options.map((o) => o.name);
         const miss = tags.filter((t) => !names.includes(t));
         if (miss.length) errors.push(`${label}: 「${tagProp}」に選択肢が無いタグ: ${miss.join('、')}`);
-        out.push({ dsId: ds.id, color: d.color, props: ds.properties, titleProp, tagProp, type, tags, mode: d.mode === 'and' ? 'and' : 'or', label });
+        out.push({ key: rowKey + ':' + ds.id, dsId: ds.id, color: d.color, props: ds.properties, titleProp, tagProp, type, tags, mode: d.mode === 'and' ? 'and' : 'or', label });
       }
     } catch (e) {
       errors.push(`${d.label || d.raw}: ${e.status ? e.message + '(IDとインテグレーションの接続を確認してください)' : 'プロキシに接続できません(プロキシURL・許可オリジン・ネットワークを確認してください)'}`);
@@ -230,8 +233,8 @@ async function load(refreshSchema) {
     const results = await Promise.all(sources.map((s) =>
       queryAll(s).then((ps) => ps.map((page) => ({ page, src: s }))).catch((e) => { errors.push(`${s.label}: ${e.message}`); return []; })));
     if (seq !== loadSeq) return;
-    items = results.flat();
-    itemsById.clear(); items.forEach((it) => itemsById.set(it.page.id, it));
+    items = results.flat();   /* 設定の行の順(上から)に並ぶ */
+    itemsById.clear(); items.forEach((it) => { if (!itemsById.has(it.page.id)) itemsById.set(it.page.id, it); });
   } catch (e) { errors.push(e.message); }
   $('#errors').textContent = errors.join('\n');
   renderAll();
@@ -309,15 +312,19 @@ function cardEl(it) {
 }
 function renderAll() {
   const legend = $('#legend'); legend.replaceChildren();
-  (sources || []).forEach((s) => legend.append(h('button', { class: 'lg' + (cfg.hidden.includes(s.dsId) ? ' off' : ''), style: `--c:${s.color}`,
+  (sources || []).forEach((s) => legend.append(h('button', { class: 'lg' + (cfg.hidden.includes(s.key) ? ' off' : ''), style: `--c:${s.color}`,
     title: `${s.tagProp}: ${s.tags.join(s.mode === 'and' ? ' かつ ' : ' または ')}`,
-    onclick: () => { const i = cfg.hidden.indexOf(s.dsId); i < 0 ? cfg.hidden.push(s.dsId) : cfg.hidden.splice(i, 1); saveCfg(); renderAll(); } },
+    onclick: () => { const i = cfg.hidden.indexOf(s.key); i < 0 ? cfg.hidden.push(s.key) : cfg.hidden.splice(i, 1); saveCfg(); renderAll(); } },
     h('i'), `${s.label} [${s.tags.join(s.mode === 'and' ? ' & ' : ' | ')}]`)));
   const q = $('#q').value.trim().toLowerCase(), sort = $('#sort').value;
   const key = (it) => Date.parse(sort === 'edited' ? it.page.last_edited_time : it.page.created_time);
-  const list = items.filter((it) => !cfg.hidden.includes(it.src.dsId))
+  /* 重複除去: 表示中の行のうち、上の行を優先して同じノートは1枚だけ残す */
+  const seen = new Set();
+  const list = items.filter((it) => !cfg.hidden.includes(it.src.key))
+    .filter((it) => { if (seen.has(it.page.id)) return false; seen.add(it.page.id); return true; })
     .filter((it) => !q || (titleOf(it) + ' ' + tagsOf(it).map((o) => o.name).join(' ') + ' ' + ((mdCache.get(it.page.id) || {}).md || '')).toLowerCase().includes(q))
     .sort((a, b) => (sort === 'casc' ? 1 : -1) * (key(a) - key(b)));
+  list.forEach((it) => itemsById.set(it.page.id, it));   /* 表示中のカードの行情報を確定 */
   $('#grid').replaceChildren(...list.map(cardEl));
   $('#status').textContent = sources ? `${list.length}件` : '';
   if (cfg.token && cfg.dbs.length && cfg.proxy) $('#msg').textContent = list.length ? '' : '条件に合うノートがありません';
@@ -356,12 +363,17 @@ function addRow(d = {}) {
       h('input', { type: 'color', class: 'c', value: d.color || PALETTE[idx % PALETTE.length] }),
       h('input', { type: 'text', class: 'id', placeholder: 'データベースURL / ID', value: d.raw || '' }),
       h('input', { type: 'text', class: 'lb', placeholder: '表示名(任意)', value: d.label || '' }),
+      h('button', { type: 'button', class: 'btn mv', title: '上へ', 'aria-label': '上へ',
+        onclick: () => { const p = wrap.previousElementSibling; if (p) wrap.parentNode.insertBefore(wrap, p); } }, '▲'),
+      h('button', { type: 'button', class: 'btn mv', title: '下へ', 'aria-label': '下へ',
+        onclick: () => { const n = wrap.nextElementSibling; if (n) wrap.parentNode.insertBefore(n, wrap); } }, '▼'),
       h('button', { type: 'button', class: 'btn', onclick: () => wrap.remove() }, '削除')),
     h('div', { class: 'row' },
       h('input', { type: 'text', class: 'tags', placeholder: 'タグ(例: 重要 仕事 メモ)', value: d.tags || '' }),
       h('select', { class: 'mode' }, h('option', { value: 'or' }, 'OR(どれか1つ)'), h('option', { value: 'and' }, 'AND(すべて)')),
       h('input', { type: 'text', class: 'pn', placeholder: 'タグのプロパティ名(任意)', value: d.prop || '' })));
   wrap.querySelector('.mode').value = d.mode === 'and' ? 'and' : 'or';
+  wrap.dataset.uid = d.uid || newUid();
   $('#dbRows').append(wrap);
 }
 function openSettings() {
@@ -373,7 +385,7 @@ function saveSettings() {
   for (const r of $('#dbRows').children) {
     const raw = r.querySelector('.id').value.trim(); if (!raw) continue;
     const id = extractId(raw); if (!id) return alert('IDを認識できません: ' + raw);
-    dbs.push({ raw, id, color: r.querySelector('.c').value, label: r.querySelector('.lb').value.trim(),
+    dbs.push({ uid: r.dataset.uid, raw, id, color: r.querySelector('.c').value, label: r.querySelector('.lb').value.trim(),
       tags: r.querySelector('.tags').value.trim(), mode: r.querySelector('.mode').value, prop: r.querySelector('.pn').value.trim() });
   }
   const proxy = $('#proxyIn').value.trim().replace(/\/+$/, '');
